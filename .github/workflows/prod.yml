@@ -1,0 +1,62 @@
+name: "CI/CD with AWS ECR, EC2, Docker Compose"
+
+on:
+  push:
+    branches: ["prod"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # Step 1: Build Java Project
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+
+      # Step 2: AWS Credentials configuration
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      # Step 3: Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Step 4: Build, Tag, and Push Docker Image to ECR
+      - name: Build, Tag, and Push Docker Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/gst-billing-mvp:latest .
+          docker push $ECR_REGISTRY/gst-billing-mvp:latest
+
+      # Step 5: SSH into EC2 and Deploy via Docker Compose (Using Stable Action Version)
+      - name: Deploy to AWS EC2 Testing Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SERVER_IP }}
+          username: ubuntu
+          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          script: |
+            # ECR login
+            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+            
+            cd /home/ubuntu/app
+            
+            # Pull the latest image and restart the container using Docker Compose
+            AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }} AWS_REGION=ap-south-1 docker compose -f docker-compose.yml pull
+            AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }} AWS_REGION=ap-south-1 docker compose -f docker-compose.yml up -d --remove-orphans

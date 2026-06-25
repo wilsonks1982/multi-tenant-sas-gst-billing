@@ -1,10 +1,10 @@
 services:
-  gst-billing-poc:
+  gst-billing-mvp:
     build:
         context: .
         dockerfile: Dockerfile
     image: tykhegaming/gst-billing-mvp:latest
-    container_name: gst-billing-poc
+    container_name: gst-billing-mvp
     networks:
      - sas-network
     ports:

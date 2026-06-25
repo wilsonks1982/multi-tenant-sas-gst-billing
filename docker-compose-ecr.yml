@@ -1,0 +1,8 @@
+services:
+  gst-billing-poc:
+    # AWS ECR image reference
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/gst-billing-mvp:latest
+    container_name: gst-billing-poc
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
